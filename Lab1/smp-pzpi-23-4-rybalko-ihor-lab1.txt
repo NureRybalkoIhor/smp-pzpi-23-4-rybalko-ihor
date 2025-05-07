@@ -192,7 +192,7 @@ GitHub репозиторій: https://github.com/NureRybalkoIhor/smp-pzpi-23-4-
 122 fi
 123
 А.4 Визначення формату розкладу: одна група чи кілька (режим singleGroup/multiGroup)
-124 mode=$(cat "$INPUT_FILE" | sed 's/\r/\n/g' | iconv -f cp1251 -t utf-8 2>/dev/null | awk '
+124 mode=$(cat "$INPUT_FILE" | sed 's/\r/\n/g' | iconv -f cp1251 -t utf-8 | awk '
 125     BEGIN { FPAT="[^,]*|\"[^\"]*\"" }
 126     NR > 1 {
 127         gsub(/^"|"$/, "", $1)
