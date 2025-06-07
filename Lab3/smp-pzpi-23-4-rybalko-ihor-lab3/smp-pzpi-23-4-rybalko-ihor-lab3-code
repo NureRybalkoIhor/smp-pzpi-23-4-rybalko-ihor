@@ -1,1 +1,409 @@
+В.1 Програмна реалізація відображення «шапки» сторінки (header.php)
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        .header {
+            width: 100%;
+            border-top: 2px solid #000;
+            border-bottom: 2px solid #000;
+            padding: 25px 0;
+            font-family: Arial, sans-serif;
+            font-size: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
 
+        .header .left,
+        .header .center,
+        .header .right {
+            flex: 1;
+        }
+
+        .header .center {
+            text-align: center;
+        }
+
+        .header .right {
+            text-align: right;
+        }
+
+        .header a {
+            text-decoration: none;
+            color: black;
+            font-weight: bold;
+            display: inline-flex;
+            align-items: center;
+        }
+
+        .header img {
+            width: 30px;
+            height: 30px;
+            margin-right: 10px;
+        }
+
+        .header .left a {
+            margin-left: 30px;
+        }
+
+        .header .right a {
+            margin-right: 30px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="left">
+            <a href="/index.php">
+                <img src="/icons/home.png" alt="Home Icon">
+                <span>Home</span>
+            </a>
+        </div>
+        <div class="center">
+            <a href="/pages/products.php">
+                <img src="/icons/menu.png" alt="Products Icon">
+                <span>Products</span>
+            </a>
+        </div>
+        <div class="right">
+            <a href="/pages/basket.php">
+                <img src="/icons/cart.png" alt="Cart Icon">
+                <span>Cart</span>
+            </a>
+        </div>
+    </div>
+</body>
+</html>
+
+В.2 Програмна реалізація відображення «підвалу» сторінки (footer.php)
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        .footer {
+            width: 100%;
+            border-top: 2px solid #000;
+            border-bottom: 2px solid #000;
+            text-align: center;
+            padding: 25px 0;
+            font-family: Arial, sans-serif;
+            font-size: 20px;
+        }
+
+        .footer a {
+            margin: 0 15px;
+            text-decoration: none;
+            color: black;
+            font-weight: bold;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="footer">
+        <a href="/index.php">Home</a> |
+        <a href="/pages/products.php">Products</a> |
+        <a href="/pages/basket.php">Cart</a> |
+        <a href="#">About us</a>
+    </div>
+</body>
+</html>
+
+В.3 Програмна реалізація db_config.php
+<?php
+session_start();
+
+function getDBConnection() {
+    try {
+        $pdo = new PDO('sqlite:' . __DIR__ . '/shop.db');
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        return $pdo;
+    } catch (PDOException $e) {
+        die('Помилка підключення до бази даних: ' . $e->getMessage());
+    }
+}
+
+function createProductsTable() {
+    $pdo = getDBConnection();
+    $sql = "
+        CREATE TABLE IF NOT EXISTS products (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            code TEXT UNIQUE NOT NULL,
+            name TEXT NOT NULL,
+            price REAL NOT NULL,
+            image TEXT NOT NULL
+        )
+    ";
+    $pdo->exec($sql);
+}
+
+function initializeProducts() {
+    $pdo = getDBConnection();
+
+    $stmt = $pdo->query('SELECT COUNT(*) FROM products');
+    $count = $stmt->fetchColumn();
+    
+    if ($count == 0) {
+        $products = [
+            ['code' => 'milk', 'name' => 'Молоко пастеризоване', 'price' => 12, 'image' => 'milk.png'],
+            ['code' => 'bread', 'name' => 'Хліб чорний', 'price' => 9, 'image' => 'bread.png'],
+            ['code' => 'cheese', 'name' => 'Сир білий', 'price' => 21, 'image' => 'cheese.png'],
+            ['code' => 'sour_cream', 'name' => 'Сметана 20%', 'price' => 25, 'image' => 'whip-cream.png'],
+            ['code' => 'kefir', 'name' => 'Кефір 1%', 'price' => 19, 'image' => 'kefir.png'],
+            ['code' => 'water', 'name' => 'Вода газована', 'price' => 18, 'image' => 'sparkling-water.png'],
+            ['code' => 'cookies', 'name' => 'Печиво \"Весна\"', 'price' => 14, 'image' => 'cookie.png']
+        ];
+        
+        $stmt = $pdo->prepare('INSERT INTO products (code, name, price, image) VALUES (?, ?, ?, ?)');
+        foreach ($products as $product) {
+            $stmt->execute([$product['code'], $product['name'], $product['price'], $product['image']]);
+        }
+    }
+}
+
+function getAllProducts() {
+    $pdo = getDBConnection();
+    $stmt = $pdo->query('SELECT * FROM products ORDER BY name');
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+function getProductByCode($code) {
+    $pdo = getDBConnection();
+    $stmt = $pdo->prepare('SELECT * FROM products WHERE code = ?');
+    $stmt->execute([$code]);
+    return $stmt->fetch(PDO::FETCH_ASSOC);
+}
+
+createProductsTable();
+initializeProducts();
+?>
+
+В.4 Програмна реалізація products.php
+<?php
+require_once '../db_config.php';
+
+$errors = [];
+$submitted = $_POST ?? [];
+
+$products = getAllProducts();
+
+$currentCart = $_SESSION['cart' ] ?? [];
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $validItems = [];
+
+    foreach ($products as $product) {
+        $code = $product['code'];
+        $qty = isset($_POST[$code]) ? (int)$_POST[$code] : 0;
+        if ($qty < 0) {
+            $errors[] = "Кількість для {$product['name']} не може бути від'ємною.";
+        } elseif ($qty > 0) {
+            $validItems[$code] = $qty;
+        }
+    }
+
+    if (empty($errors)) {
+        $_SESSION['cart'] = $validItems;
+        $_SESSION['last_form_data'] = $_POST;
+        header('Location: basket.php');
+        exit;
+    }
+}
+
+$formData = [];
+if (!empty($currentCart)) {
+    $formData = $_SESSION['last_form_data'] ?? $currentCart;
+} else {
+    unset($_SESSION['last_form_data']);
+}
+
+$root_path = '../';
+include $root_path . 'components/header.php';
+?>
+
+<div style="max-width: 800px; margin: 20px auto; padding: 20px; font-family: Arial, sans-serif;">
+    <h2>Наші продукти</h2>
+
+    <?php if (!empty($errors)): ?>
+        <div class="error" style="background-color: #ffebee; border: 1px solid #f44336; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+            <strong>Перевірте будь ласка введені дані:</strong>
+            <ul>
+                <?php foreach ($errors as $err): ?>
+                    <li><?= htmlspecialchars($err) ?></li>
+                <?php endforeach; ?>
+            </ul>
+        </div>
+    <?php endif; ?>
+
+    <form method="POST" action="products.php" style="background-color: #f9f9f9; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="border-bottom: 2px solid #ddd; background-color: #f2f2f2;">
+                    <th style="padding: 10px; text-align: center;">№</th>
+                    <th style="padding: 10px; text-align: left;">НАЗВА</th>
+                    <th style="padding: 10px; text-align: right;">ЦІНА</th>
+                    <th style="padding: 10px; text-align: right;">КІЛЬКІСТЬ</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php $i = 1; foreach ($products as $product): ?>
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 10px; text-align: center;"><?= $i ?></td>
+                        <td style="padding: 10px;">
+                            <div style="display: flex; align-items: center;">
+                                <div style="width: 50px; height: 50px; margin-right: 10px; background-color: #eee; display: flex; justify-content: center; align-items: center; border-radius: 4px;">
+                                    <img src="../icons/products/<?= htmlspecialchars($product['image']) ?>" alt="<?= htmlspecialchars($product['name']) ?>" style="max-width: 40px; max-height: 40px;">
+                                </div>
+                                <span style="font-weight: bold;"><?= htmlspecialchars($product['name']) ?></span>
+                            </div>
+                        </td>
+                        <td style="padding: 10px; text-align: right;"><?= $product['price'] ?> грн</td>
+                        <td style="padding: 10px; text-align: right;">
+                            <input type="number" name="<?= htmlspecialchars($product['code']) ?>" min="0" value="<?= isset($formData[$product['code']]) ? (int)$formData[$product['code']] : 0 ?>" style="padding: 8px; width: 60px; border: 1px solid #ddd; border-radius: 4px;">
+                        </td>
+                    </tr>
+                <?php $i++; endforeach; ?>
+            </tbody>
+        </table>
+        <div style="margin-top: 20px; text-align: right;">
+            <button type="submit" style="background-color: #4CAF50; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px;">Додати до кошика</button>
+        </div>
+    </form>
+</div>
+
+<?php 
+unset($_SESSION['last_form_data']);
+include $root_path . 'components/footer.php'; 
+?>
+
+В.5 Програмна реалізація basket.php
+<?php
+require_once '../db_config.php';
+
+$cart = $_SESSION['cart'] ?? [];
+$total = 0;
+
+$root_path = '../';
+include $root_path . 'components/header.php';
+
+if (isset($_GET['remove'])) {
+    $removeCode = $_GET['remove'];
+    if (isset($cart[$removeCode])) {
+        unset($cart[$removeCode]);
+        $_SESSION['cart'] = $cart;
+        if (isset($_SESSION['last_form_data'][$removeCode])) {
+            unset($_SESSION['last_form_data'][$removeCode]);
+        }
+        header('Location: basket.php');
+        exit;
+    }
+}
+
+if (isset($_GET['clear'])) {
+    $_SESSION['cart'] = [];
+    unset($_SESSION['last_form_data']);
+    header('Location: basket.php');
+    exit;
+}
+
+if (isset($_GET['checkout'])) {
+    $_SESSION['cart'] = [];
+    unset($_SESSION['last_form_data']);
+    header('Location: basket.php?checkout_success=1');
+    exit;
+}
+?>
+
+<div style="max-width: 800px; margin: 20px auto; padding: 20px; font-family: Arial, sans-serif;">
+    <h2>Ваш кошик</h2>
+
+    <?php if (isset($_GET['checkout_success'])): ?>
+        <div style="display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 400px; text-align: center;">
+            <p style="font-size: 24px; color: #333; margin-bottom: 20px;">Ваше замовлення успішно оформлено!</p>
+            <a href="products.php" style="background-color: #2196F3; color: white; padding: 15px 25px; text-decoration: none; border-radius: 5px; font-size: 18px; display: inline-block;">Перейти до покупок</a>
+        </div>
+    <?php elseif (empty($cart)): ?>
+        <p style="background-color: #f8f8f8; padding: 15px; border-radius: 5px;">Кошик порожній.</p>
+        <div style="margin-top: 20px;">
+            <a href="products.php" style="background-color: #2196F3; color: white; padding: 10px 15px; text-decoration: none; border-radius: 4px; display: inline-block;">Перейти до покупок</a>
+        </div>
+    <?php else: ?>
+        <div style="background-color: #f9f9f9; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="background-color: #e0e0e0;">
+                        <th style="padding: 10px; text-align: left; border-bottom: 1px solid #ddd;">№</th>
+                        <th style="padding: 10px; text-align: left; border-bottom: 1px solid #ddd;">Назва</th>
+                        <th style="padding: 10px; text-align: right; border-bottom: 1px solid #ddd;">Ціна</th>
+                        <th style="padding: 10px; text-align: right; border-bottom: 1px solid #ddd;">Кількість</th>
+                        <th style="padding: 10px; text-align: right; border-bottom: 1px solid #ddd;">Сума</th>
+                        <th style="padding: 10px; text-align: center; border-bottom: 1px solid #ddd;">Дія</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php $i = 1; foreach ($cart as $code => $qty): ?>
+                        <?php
+                        $product = getProductByCode($code);
+                        if (!$product) continue;
+                        $price = $product['price'];
+                        $itemTotal = $price * $qty;
+                        $total += $itemTotal;
+                        ?>
+                        <tr>
+                            <td style="padding: 10px; border-bottom: 1px solid #eee;"><?= $i ?></td>
+                            <td style="padding: 10px; border-bottom: 1px solid #eee;">
+                                <div style="display: flex; align-items: center;">
+                                    <div style="width: 40px; height: 40px; margin-right: 10px; background-color: #eee; display: flex; justify-content: center; align-items: center; border-radius: 4px;">
+                                        <img src="../icons/products/<?= htmlspecialchars($product['image']) ?>" alt="<?= htmlspecialchars($product['name']) ?>" style="max-width: 30px; max-height: 30px;">
+                                    </div>
+                                    <?= htmlspecialchars($product['name']) ?>
+                                </div>
+                            </td>
+                            <td style="padding: 10px; text-align: right; border-bottom: 1px solid #eee;"><?= $price ?> грн</td>
+                            <td style="padding: 10px; text-align: right; border-bottom: 1px solid #eee;"><?= $qty ?></td>
+                            <td style="padding: 10px; text-align: right; border-bottom: 1px solid #eee; color: #4CAF50; font-weight: bold;"><?= $itemTotal ?> грн</td>
+                            <td style="padding: 10px; text-align: center; border-bottom: 1px solid #eee;">
+                                <a href="?remove=<?= urlencode($code) ?>" style="display: inline-block;" onclick="return confirm('Видалити товар з кошика?')">
+                                    <img src="../icons/delete.png" alt="Видалити" style="width: 20px; height: 20px;">
+                                </a>
+                            </td>
+                        </tr>
+                    <?php $i++; endforeach; ?>
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="4" style="padding: 10px; text-align: right; font-weight: bold;">Загальна вартість:</td>
+                        <td style="padding: 10px; text-align: right; color: #4CAF50; font-weight: bold;"><?= $total ?> грн</td>
+                        <td></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+
+        <div style="margin-top: 20px; display: flex; justify-content: space-between;">
+            <div>
+                <a href="products.php" style="background-color: #2196F3; color: white; padding: 10px 15px; text-decoration: none; border-radius: 4px; display: inline-block;">Повернутися до продуктів</a>
+            </div>
+            <div>
+                <a href="?clear=1" style="background-color: #f44336; color: white; padding: 10px 15px; text-decoration: none; border-radius: 4px; display: inline-block; margin-right: 10px;" onclick="return confirm('Очистити весь кошик?')">Очистити кошик</a>
+                <a href="?checkout=1" style="background-color: #4CAF50; color: white; padding: 10px 15px; text-decoration: none; border-radius: 4px; display: inline-block;" onclick="return confirm('Ви впевнені, що хочете оформити замовлення?')">Оформити замовлення</a>
+            </div>
+        </div>
+    <?php endif; ?>
+</div>
+
+<?php include $root_path . 'components/footer.php'; ?>
+
+В.6 Програмна реалізація index.php
+<?php include 'components/header.php'; ?>
+
+<div style="text-align: center; margin: 40px; font-family: Arial, sans-serif;">
+    <h1>Продовольчий магазин "Весна"</h1>
+    <p>Все буде УКРАЇНА!</p>
+</div>
+
+<?php include 'components/footer.php'; ?>
