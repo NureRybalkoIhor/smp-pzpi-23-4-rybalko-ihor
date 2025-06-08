@@ -19,5 +19,1177 @@
 
 1 ІСТОРІЯ ЗМІН
 №     Дата     Версія звіту   Опис змін та виправлень
-1   27.05.25       0.1        Створено розділи «Історія змін», «Завдання», «Опис виконаної роботи», «Висновки»
-2   01.06.25       0.2        Редагування розділів «Опис виконаної роботи», «Висновки» та створення розділів «Додаток А», «Додаток Б» та «Додаток В»
+1   01.06.25       0.1        Створено розділи «Історія змін», «Завдання», «Опис виконаної роботи», «Висновки»
+2   05.06.25       0.2        Редагування розділів «Опис виконаної роботи», «Висновки» та створення розділів «Додаток А», «Додаток Б» та «Додаток В»
+3   07.06.25       0.3        Доповнення додатків та редагування опису виконаних робіт
+
+2 ЗАВДАННЯ
+Під час лабораторної роботи, використовуючи матеріал попередніх лабораторних робіт, потрібно додати такий функціонал: 
+1. Прибрати дублювання шапки і підвалу сайту (якщо воно є). 
+2. Додати сторінку логіна. Обмежити доступ до сайту не залогіненим користувачам. 
+3. Додати сторінку профілю з можливістю завантажити фото.
+
+3 ОПИС ВИКОНАНОЇ РОБОТИ
+Розпочнемо зі змін компонентів сторінки: «шапки» та «підвалу» сторінок.  «Підвал» сайту (програмна реалізація В.2) не зазнав великих змін, але нинішньому варіанті змінилась структура посилань - замість окремих файлів використовуються параметри index.php?page=... для централізованої маршрутизації. Також стилі переміщено з <head> у кінець документа як частину вбудованого CSS. Стосовно «шапки» (програмна реалізація В.1), то вона стала динамічною, тобто формується на основі PHP-умов залежно від ситуації: якщо користувач авторизований, з'являються пункти "Cart" і "Profile", а якщо ні — тільки "Login". Наприклад, якщо $is_logged_in = true, у меню буде: Home, Products, Cart, Profile. Якщо сторінка — помилка ($page === 'page404'), меню спрощується до Home, Products, Login. Усі пункти меню зберігаються в асоціативному масиві $menu_items, що спрощує додавання або зміну пунктів без переписування HTML. Крім того, URL-адреси тепер мають вигляд /index.php?page=products, що забезпечує централізовану маршрутизацію. Іконки, як-от home.png або login.png, теж підставляються динамічно з цього масиву, наприклад: <img src="/icons/<?= $item['icon'] ?>">. Усі пункти розміщуються у секціях з однаковими стилями, без прив’язки до left, center, right.
+
+У файлі db_config (програмна реалізація В.3) нічого не змінилось, але тепер використовується перевірка if (session_status() == PHP_SESSION_NONE) { session_start(); } замість прямого виклику session_start(). Це зроблено для уникнення помилки типу "session already started", яка може виникнути, якщо сесію спробують запустити повторно.
+ 
+Тепер у файлі index.php (візуальна частина див. Б.1, Б.6; програмна реалізація В.12) реалізовано механізм маршрутизації та контролю доступу користувачів. Спочатку запускається сесія через session_start(), щоб відслідковувати авторизацію користувача. Далі визначається масив сторінок, які потребують авторизації ($auth_required_pages), публічних сторінок ($public_pages) і всі можливі сторінки ($all_pages). Потім перевіряється, чи запитувана сторінка належить до дозволених — якщо ні, встановлюється код помилки 404, і виводиться відповідне повідомлення разом із хедером і футером.
+Наприклад, якщо користувач звертається до /index.php?page=unknown, він отримає сторінку з повідомленням “Сторінка не знайдена” та HTTP статус 404. Якщо авторизований користувач намагається перейти на сторінку логіну (login), його автоматично переадресовує на головну (header('Location: index.php')), що запобігає повторному входу.
+Для сторінки виходу (logout) реалізовано завершення сесії через session_destroy(), після чого користувач повертається на головну сторінку. Якщо користувач неавторизований і намагається зайти на захищені сторінки, наприклад, products або basket, він потрапить на сторінку 404, що підвищує безпеку ресурсу.
+Якщо сторінка не є login, підключається заголовок і виводиться повідомлення про помилки авторизації, якщо такі є, через перевірку $_SESSION['auth_error']. Основна логіка відображення сторінок реалізована через switch за значенням параметра $page: наприклад, для products підключається відповідний файл pages/products.php.
+
+Наразі у файлі products.php (візуальна частина див. Б.5; програмна реалізація В.4) було покращено логіку роботи з сесією: тепер на початку скрипта перевіряється, чи активна сесія, і, за потреби, вона запускається. Це необхідно для коректного використання змінної $_SESSION, зокрема для збереження кошика.
+Після валідації, якщо помилок немає, дані кошика оновлюються в сесії, і користувач перенаправляється на сторінку кошика. Якщо ж помилки є, то введені дані зберігаються, щоб не втратити їх і відобразити у формі.
+ 29     if (empty($errors)) {
+ 30         $_SESSION['cart'] = $validItems;
+ 31         $_SESSION['last_form_data'] = $_POST;
+ 32         header('Location: /index.php?page=basket');
+ 33         exit;
+ 34     } else {
+ 35         $_SESSION['last_form_data'] = $_POST;
+ 36     }
+Усі інші частини коду, зокрема HTML-розмітка та загальний вигляд сторінки, залишились без кардинальних змін.
+
+У файлі basket.php (візуальна частина див. Б.7; програмна реалізація В.5) було прибрано прямі підключення компонентів header.php та footer.php. Замість цього сторінка тепер передбачає, що загальна обгортка (header і footer) підключається централізовано через головний файл (наприклад, index.php). Це дозволяє уникнути дублювання коду і робить структуру більш чистою та підтримуваною. І також відбулися важливі зміни в організації навігації та підключення сторінок. Зокрема, замість прямого звернення до окремих PHP-файлів використовується більш уніфікований і централізований підхід з динамічною маршрутизацією через головний файл, наприклад Location: index.php?page=basket. 
+
+Тепер стосовно нових сторінок, було додано login.php (візуальна частина див. Б.3, Б.4; програмна реалізація В.6), де реалізовано простий механізм авторизації користувача з використанням сесій PHP. Спершу, якщо сесія ще не була запущена, вона ініціалізується, щоб зберігати інформацію про користувача між запитами. Далі сторінка підключає файл з обліковими даними (credential.php), у якому збережено правильне ім'я користувача та пароль. Якщо користувач вже увійшов у систему (тобто у сесії присутній логін), його автоматично перенаправляють на сторінку з товарами, щоб уникнути повторного входу.
+Коли користувач відправляє форму входу, сервер приймає дані з полів імені користувача та пароля, обрізаючи зайві пробіли: $username = trim($_POST['username'] ?? '');. Відбувається перевірка, чи обидва поля заповнені — якщо ні, то виводиться повідомлення про помилку з проханням заповнити всі поля. Якщо дані введені, система порівнює їх із збереженими обліковими даними. У разі співпадіння, ім’я користувача і час входу зберігаються у сесії, після чого користувач перенаправляється на сторінку з товарами. Якщо ж дані не відповідають збереженим, відображається помилка про неправильне ім’я або пароль.
+ Файл credential.php (програмна реалізація В.9) виконує роль окремого модуля, який містить тестові облікові дані користувача для авторизації. 
+            1 <?php
+            2 return [
+            3     'userName' => 'Test',
+            4     'password' => '123123'
+            5 ];
+Далі, файл logout.php (програмна реалізація В.10) відповідає за завершення сесії користувача. Він запускає сесію, очищає всі її змінні за допомогою session_unset(), знищує сесію через session_destroy() і перенаправляє користувача на головну сторінку сайту header('Location: /index.php');
+  1 <?php
+  2 session_start();
+  3 session_unset();
+  4 session_destroy();
+  5
+  6 header('Location: /index.php');
+  7 exit;
+Файл сторінки page404.php  (візуальна частина див. Б.2; програмна реалізація В.7) реалізує обробку помилок доступу до контенту, зокрема коли користувач намагається переглянути сторінку без авторизації. Цей файл встановлює відповідний HTTP статус-код 404 за допомогою функції http_response_code(404);, що сигналізує браузеру і пошуковим системам про те, що сторінка недоступна або не знайдена. Далі йде HTML-розмітка, яка візуально оформлює повідомлення для користувача з метою позначення проблеми (Доступ заборонено), підзаголовок з поясненням ситуації, а також посилання для переходу на сторінку авторизації:
+ 45         <p>Для перегляду цього контенту, будь ласка, <a href="index.php?page=login">авторизуйтеся</a>.</p>
+Далі розглядаємо файл сторінки profile.php (візуальна частина див. Б.8 - Б.10; програмна реалізація В.8). Спочатку реалізована PHP-логіка обробки профілю користувача. Скрипт починається з перевірки активності сесії та її запуску, що дозволяє працювати з користувацькими даними через $_SESSION['user_id']. Далі визначається шлях до файлу profile_data.php, де зберігається інформація про профіль у вигляді асоціативного масиву.  Далі код ініціалізує змінну профілю, підвантажуючи дані з файлу, якщо він існує, або встановлює порожні значення за замовчуванням, а також створює порожні масиви для збереження повідомлень про помилки та успішне виконання дій.
+ Скрипт виконує валідацію текстових полів: ім’я, прізвище, дата народження та стислий опис. Зокрема, перевіряється наявність імені та прізвища, коректність дати (через strtotime) і вік користувача (має бути не менше 16 років). Усі помилки додаються до масиву $errors, і якщо його порожньо, профіль зберігається у файл profile_data.php через var_export, що дозволяє зручно імпортувати масив при наступному запуску. Ще скрипт перевіряє, чи було завантажено нове зображення: перевіряється розмір ($_FILES['photo']['size']), MIME-тип ($_FILES['photo']['type']) і генерується унікальне ім’я файлу за допомогою uniqid(). Після успішного переміщення файлу з тимчасової директорії (move_uploaded_file) значення photo додається до профілю. 
+Реалізовано CSS стилі компонентів сторінки, зокрема стилізовані класи .profile-photo, .photo-placeholder, .error, .success та інші, які надають сторінці приємного вигляду, помилки введення, а також забезпечуючи зручну структуру форми. 
+Далі представлено HTML-інтерфейс із JavaScript для завантаження профілю та обробки фото. Форма містить дві основні колонки: ліва — для фото, права — для полів профілю. Якщо фото вже завантажене, виводиться тег <img src="/Uploads/..."> з поточним аватаром, інакше — блок-запрошення "Завантажте фото". Всі текстові поля, як-от ім’я, прізвище, дата народження (<input type="date">) та опис (<textarea>), заповнюються значеннями з асоціативного масиву $profile та автоматично екрануються через htmlspecialchars(). Код реалізує, що при кліку на зображення профілю автоматично відкривається вікно вибору файлу (input[type="file"]), а після вибору фото користувач отримує підтвердження у вигляді confirm(). Якщо він погоджується, фото та інші поля надсилаються через fetch() у вигляді FormData на цю ж сторінку, де PHP-логіка вже чекає POST-запит. При успішній відповіді сторінка перезавантажується (window.location.reload()), а в разі помилки користувач бачить сповіщення. Фінально, обробник події submit на формі блокує повторне надсилання, якщо кнопка вже була натиснута. 
+Файл profile_data.php (програмна реалізація В.11) виконує роль сховища даних профілю користувача у вигляді асоціативного масиву, який містить порожні поля для імені, прізвища, дати народження, короткого опису та шляху до фотографії — це стартові значення, які згодом можуть бути оновлені під час роботи програми.
+  1 <?php return array (
+  2   'firstName' => '',
+  3   'lastName' => '',
+  4   'birthDate' => '',
+  5   'info' => '',
+  6   'photo' => '',
+  7 );
+
+4 ВИСНОВКИ
+Під час лабораторної роботи було успішно реалізовано важливі функціональні покращення вебзастосунку. По-перше, ми оптимізували структуру сайту, позбавившись дублювання шапки та підвалу, що покращило підтримуваність код. По-друге, створено сторінку авторизації, яка обмежує доступ до основного контенту лише для зареєстрованих користувачів, що підвищує безпеку застосунку. По-третє, додано сторінку профілю користувача з можливістю редагування особистих даних та завантаження фотографії. Загалом, виконані завдання сприяють більшій функціональності сайту, а також забезпечують надійну роботу з даними користувачів.
+
+
+ДОДАТОК А
+Відеозапис
+Відеозапис презентації результатів лабораторної роботи: https://www.youtube.com/watch?v=z2rlnBphrWE 
+Хронологічний опис відеозапису:
+00:00 - Програмна реалізація «шапки» сторінки (header.php) та «підвалу» сторінки (footer.php)
+01:57 -  Програмна реалізація db_config.php та products.php
+03:47 - Програмна реалізація products.php та basket.php
+04:04 -  Програмна реалізація credential.php, logout.php та profile_data.php
+04:30 - Програмна реалізація login.php
+05:43 - Програмна реалізація page404.php
+06:02 - Програмна реалізація profile.php
+08:20 - Демонстрація функціонування програми
+
+ДОДАТОК Б
+Графічні матеріали
+  
+Рисунок Б.1 - Візуальне зображення реалізації головної сторінки (незареєстрований користувач)
+  
+
+Рисунок Б.2 - Візуальне зображення сторінки 404 про заборону доступу (незареєстрований користувач)
+  
+
+Рисунок Б.3 - Візуальне зображення сторінки реєстрації 
+  
+
+Рисунок Б.4 - Візуальне зображення сторінки реєстрації, демострація валідації
+
+
+Рисунок Б.5 - Візуальне зображення сторінки товарів (зареєстрований користувач)
+  
+
+Рисунок Б.6 - Візуальне зображення головної сторінки (зареєстрований користувач)
+  
+
+Рисунок Б.7 - Візуальне зображення сторінки кошику (зареєстрований користувач)
+  
+
+Рисунок Б.8 - Візуальне зображення сторінки профілю, відсутня інформація про зареєстрованого користувача
+  
+
+Рисунок Б.9 - Візуальне зображення валідації сторінки профілю, відсутня інформація про зареєстрованого користувача
+  
+
+Рисунок Б.10 - Візуальне зображення занесення та збереження інформації про зареєстрованого користувача, сторінка профілю
+
+ДОДАТОК В
+Програмний код
+GitHub репозиторій: https://github.com/NureRybalkoIhor/smp-pzpi-23-4-rybalko-ihor/blob/main/Lab4/smp-pzpi-23-4-rybalko-ihor-lab4/smp-pzpi-23-4-rybalko-ihor-lab4-code 
+В.1 Програмна реалізація відображення «шапки» сторінки (header.php)
+  1 <?php
+  2 if (session_status() === PHP_SESSION_NONE) {
+  3     session_start();
+  4 }
+  5
+  6 $page = $_GET['page'] ?? 'home';
+  7 $is_logged_in = isset($_SESSION['username']);
+  8
+  9 if ($page === 'page404') {
+ 10     $menu_items = [
+ 11         'home' => ['icon' => 'home.png', 'label' => 'Home'],
+ 12         'products' => ['icon' => 'menu.png', 'label' => 'Products'],
+ 13         'login' => ['icon' => 'login.png', 'label' => 'Login'],
+ 14     ];
+ 15 } elseif ($is_logged_in) {
+ 16     $menu_items = [
+ 17         'home' => ['icon' => 'home.png', 'label' => 'Home'],
+ 18         'products' => ['icon' => 'menu.png', 'label' => 'Products'],
+ 19         'basket' => ['icon' => 'cart.png', 'label' => 'Cart'],
+ 20         'profile' => ['icon' => 'profile.png', 'label' => 'Profile'],
+ 21     ];
+ 22 } else {
+ 23     $menu_items = [
+ 24         'home' => ['icon' => 'home.png', 'label' => 'Home'],
+ 25         'products' => ['icon' => 'menu.png', 'label' => 'Products'],
+ 26         'login' => ['icon' => 'login.png', 'label' => 'Login'],
+ 27     ];
+ 28 }
+ 29 ?>
+ 30
+ 31 <div class="header">
+ 32     <?php foreach ($menu_items as $page_key => $item): ?>
+ 33         <div class="section">
+ 34             <a href="/index.php?page=<?= htmlspecialchars($page_key) ?>">
+ 35                 <img src="/icons/<?= htmlspecialchars($item['icon']) ?>" alt="<?= htmlspecialchars($item['label']) ?> Icon" />
+ 36                 <span><?= htmlspecialchars($item['label']) ?></span>
+ 37             </a>
+ 38         </div>
+ 39     <?php endforeach; ?>
+ 40 </div>
+ 41
+ 42 <style>
+ 43 .header {
+ 44     width: 100%;
+ 45     border-top: 2px solid #000;
+ 46     border-bottom: 2px solid #000;
+ 47     padding: 25px 30px;
+ 48     font-family: Arial, sans-serif;
+ 49     font-size: 20px;
+ 50     display: flex;
+ 51     justify-content: space-between;
+ 52     align-items: center;
+ 53 }
+ 54
+ 55 .header .section {
+ 56     flex: 1;
+ 57     text-align: center;
+ 58 }
+ 59
+ 60 .header a {
+ 61     text-decoration: none;
+ 62     color: black;
+ 63     font-weight: bold;
+ 64     display: inline-flex;
+ 65     align-items: center;
+ 66     justify-content: center;
+ 67     gap: 10px;
+ 68 }
+ 69
+ 70 .header a img {
+ 71     width: 30px;
+ 72     height: 30px;
+ 73 }
+ 74 </style>
+
+
+В.2 Програмна реалізація відображення «підвалу» сторінки (footer.php)
+  1 <div class="footer">
+  2     <a href="/index.php">Home</a> |
+  3     <a href="/index.php?page=products">Products</a> |
+  4     <a href="/index.php?page=basket">Cart</a> |
+  5     <a href="/index.php?page=about">About us</a>
+  6 </div>
+  7
+  8 <style>
+  9     .footer {
+ 10         width: 100%;
+ 11         border-top: 2px solid #000;
+ 12         border-bottom: 2px solid #000;
+ 13         text-align: center;
+ 14         padding: 25px 0;
+ 15         font-family: Arial, sans-serif;
+ 16         font-size: 20px;
+ 17     }
+ 18
+ 19     .footer a {
+ 20         margin: 0 15px;
+ 21         text-decoration: none;
+ 22         color: black;
+ 23         font-weight: bold;
+ 24     }
+ 25
+ 26     .footer a:hover {
+ 27         text-decoration: underline;
+ 28     }
+ 29 </style>
+
+
+В.3 Програмна реалізація db_config.php
+  1 <?php
+  2 if (session_status() == PHP_SESSION_NONE) {
+  3     session_start();
+  4 }
+  5
+  6 function getDBConnection() {
+  7     try {
+  8         $pdo = new PDO('sqlite:' . __DIR__ . '/shop.db');
+  9         $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+ 10         return $pdo;
+ 11     } catch (PDOException $e) {
+ 12         die('Помилка підключення до бази даних: ' . $e->getMessage());
+ 13     }
+ 14 }
+ 15
+ 16 function createProductsTable() {
+ 17     $pdo = getDBConnection();
+ 18     $sql = "
+ 19         CREATE TABLE IF NOT EXISTS products (
+ 20             id INTEGER PRIMARY KEY AUTOINCREMENT,
+ 21             code TEXT UNIQUE NOT NULL,
+ 22             name TEXT NOT NULL,
+ 23             price REAL NOT NULL,
+ 24             image TEXT NOT NULL
+ 25         )
+ 26     ";
+ 27     $pdo->exec($sql);
+ 28 }
+ 29
+ 30 function initializeProducts() {
+ 31     $pdo = getDBConnection();
+ 32
+ 33     $stmt = $pdo->query('SELECT COUNT(*) FROM products');
+ 34     $count = $stmt->fetchColumn();
+ 35
+ 36     if ($count == 0) {
+ 37         $products = [
+ 38             ['code' => 'milk', 'name' => 'Молоко пастеризоване', 'price' => 12, 'image' => 'milk.png'],
+ 39             ['code' => 'bread', 'name' => 'Хліб чорний', 'price' => 9, 'image' => 'bread.png'],
+ 40             ['code' => 'cheese', 'name' => 'Сир білий', 'price' => 21, 'image' => 'cheese.png'],
+ 41             ['code' => 'sour_cream', 'name' => 'Сметана 20%', 'price' => 25, 'image' => 'whip-cream.png'],
+ 42             ['code' => 'kefir', 'name' => 'Кефір 1%', 'price' => 19, 'image' => 'kefir.png'],
+ 43             ['code' => 'water', 'name' => 'Вода газована', 'price' => 18, 'image' => 'sparkling-water.png'],
+ 44             ['code' => 'cookies', 'name' => 'Печиво \"Весна\"', 'price' => 14, 'image' => 'cookie.png']
+ 45         ];
+ 46
+ 47         $stmt = $pdo->prepare('INSERT INTO products (code, name, price, image) VALUES (?, ?, ?, ?)');
+ 48         foreach ($products as $product) {
+ 49             $stmt->execute([$product['code'], $product['name'], $product['price'], $product['image']]);
+ 50         }
+ 51     }
+ 52 }
+ 53
+ 54 function getAllProducts() {
+ 55     $pdo = getDBConnection();
+ 56     $stmt = $pdo->query('SELECT * FROM products ORDER BY name');
+ 57     return $stmt->fetchAll(PDO::FETCH_ASSOC);
+ 58 }
+ 59
+ 60 function getProductByCode($code) {
+ 61     $pdo = getDBConnection();
+ 62     $stmt = $pdo->prepare('SELECT * FROM products WHERE code = ?');
+ 63     $stmt->execute([$code]);
+ 64     return $stmt->fetch(PDO::FETCH_ASSOC);
+ 65 }
+ 66
+ 67 createProductsTable();
+ 68 initializeProducts();
+ 69 ?>
+
+
+В.4 Програмна реалізація products.php
+  1 <?php
+  2 if (session_status() === PHP_SESSION_NONE) {
+  3     session_start();
+  4 }
+  5
+  6 require_once __DIR__ . '/../db_config.php';
+  7
+  8 $errors = [];
+  9 $submitted = $_POST ?? [];
+ 10
+ 11 $products = getAllProducts();
+ 12
+ 13 $currentCart = $_SESSION['cart'] ?? [];
+ 14
+ 15 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+ 16     $validItems = [];
+ 17
+ 18     foreach ($products as $product) {
+ 19         $code = $product['code'];
+ 20         $qty = isset($_POST[$code]) ? (int)$_POST[$code] : 0;
+ 21
+ 22         if ($qty < 0) {
+ 23             $errors[] = "Кількість для «{$product['name']}» не може бути від’ємною.";
+ 24         } elseif ($qty > 0) {
+ 25             $validItems[$code] = $qty;
+ 26         }
+ 27     }
+ 28
+ 29     if (empty($errors)) {
+ 30         $_SESSION['cart'] = $validItems;
+ 31         $_SESSION['last_form_data'] = $_POST;
+ 32         header('Location: /index.php?page=basket');
+ 33         exit;
+ 34     } else {
+ 35         $_SESSION['last_form_data'] = $_POST;
+ 36     }
+ 37 }
+ 38
+ 39 $formData = [];
+ 40 if (!empty($_SESSION['last_form_data'])) {
+ 41     $formData = $_SESSION['last_form_data'];
+ 42 } elseif (!empty($currentCart)) {
+ 43     $formData = $currentCart;
+ 44 }
+ 45
+ 46 ?>
+ 47
+ 48 <div style="max-width: 800px; margin: 20px auto; padding: 20px; font-family: Arial, sans-serif;">
+ 49     <h2>Наші продукти</h2>
+ 50
+ 51     <?php if (!empty($errors)): ?>
+ 52         <div class="error" style="background-color: #ffebee; border: 1px solid #f44336; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+ 53             <strong>Перевірте будь ласка введені дані:</strong>
+ 54             <ul>
+ 55                 <?php foreach ($errors as $err): ?>
+ 56                     <li><?= htmlspecialchars($err) ?></li>
+ 57                 <?php endforeach; ?>
+ 58             </ul>
+ 59         </div>
+ 60     <?php endif; ?>
+ 61
+ 62     <form method="POST" action="/index.php?page=products" style="background-color: #f9f9f9; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+ 63         <table style="width: 100%; border-collapse: collapse;">
+ 64             <thead>
+ 65                 <tr style="border-bottom: 2px solid #ddd; background-color: #f2f2f2;">
+ 66                     <th style="padding: 10px; text-align: center;">№</th>
+ 67                     <th style="padding: 10px; text-align: left;">НАЗВА</th>
+ 68                     <th style="padding: 10px; text-align: right;">ЦІНА</th>
+ 69                     <th style="padding: 10px; text-align: right;">КІЛЬКІСТЬ</th>
+ 70                 </tr>
+ 71             </thead>
+ 72             <tbody>
+ 73                 <?php $i = 1; foreach ($products as $product): ?>
+ 74                     <tr style="border-bottom: 1px solid #eee;">
+ 75                         <td style="padding: 10px; text-align: center;"><?= $i ?></td>
+ 76                         <td style="padding: 10px;">
+ 77                             <div style="display: flex; align-items: center;">
+ 78                                 <div style="width: 50px; height: 50px; margin-right: 10px; background-color: #eee; display: flex; justify-content: center; align-items: center; border-radius: 4px;">
+ 79                                     <img src="../icons/products/<?= htmlspecialchars($product['image']) ?>" alt="<?= htmlspecialchars($product['name']) ?>" style="max-width: 40px; max-height: 40px;">
+ 80                                 </div>
+ 81                                 <span style="font-weight: bold;"><?= htmlspecialchars($product['name']) ?></span>
+ 82                             </div>
+ 83                         </td>
+ 84                         <td style="padding: 10px; text-align: right;"><?= number_format($product['price'], 2, ',', ' ') ?> грн</td>
+ 85                         <td style="padding: 10px; text-align: right;">
+ 86                             <input
+ 87                                 type="number"
+ 88                                 name="<?= htmlspecialchars($product['code']) ?>"
+ 89                                 min="0"
+ 90                                 value="<?= isset($formData[$product['code']]) ? (int)$formData[$product['code']] : 0 ?>"
+ 91                                 style="padding: 8px; width: 60px; border: 1px solid #ddd; border-radius: 4px;"
+ 92                             >
+ 93                         </td>
+ 94                     </tr>
+ 95                 <?php $i++; endforeach; ?>
+ 96             </tbody>
+ 97         </table>
+ 98         <div style="margin-top: 20px; text-align: right;">
+ 99             <button type="submit" style="background-color: #4CAF50; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px;">
+100                 Додати до кошика
+101             </button>
+102         </div>
+103     </form>
+104 </div>
+
+
+В.5 Програмна реалізація basket.php
+  1 <?php
+  2 require_once __DIR__ . '/../db_config.php';
+  3
+  4 $cart = $_SESSION['cart'] ?? [];
+  5 $total = 0;
+  6
+  7 if (isset($_GET['remove'])) {
+  8     $removeCode = $_GET['remove'];
+  9     if (isset($cart[$removeCode])) {
+ 10         unset($cart[$removeCode]);
+ 11         $_SESSION['cart'] = $cart;
+ 12         if (isset($_SESSION['last_form_data'][$removeCode])) {
+ 13             unset($_SESSION['last_form_data'][$removeCode]);
+ 14         }
+ 15         header('Location: index.php?page=basket');
+ 16         exit;
+ 17     }
+ 18 }
+ 19
+ 20 if (isset($_GET['clear'])) {
+ 21     $_SESSION['cart'] = [];
+ 22     unset($_SESSION['last_form_data']);
+ 23     header('Location: index.php?page=basket');
+ 24     exit;
+ 25 }
+ 26
+ 27 if (isset($_GET['checkout'])) {
+ 28     $_SESSION['cart'] = [];
+ 29     unset($_SESSION['last_form_data']);
+ 30     header('Location: index.php?page=basket&checkout_success=1');
+ 31     exit;
+ 32 }
+ 33 ?>
+ 34
+ 35 <div style="max-width: 800px; margin: 20px auto; padding: 20px; font-family: Arial, sans-serif;">
+ 36     <h2>Ваш кошик</h2>
+ 37
+ 38     <?php if (isset($_GET['checkout_success'])): ?>
+ 39         <div style="display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 400px; text-align: center;">
+ 40             <p style="font-size: 24px; color: #333; margin-bottom: 20px;">Ваше замовлення успішно оформлено!</p>
+ 41             <a href="index.php?page=products" style="background-color: #2196F3; color: white; padding: 15px 25px; text-decoration: none; border-radius: 5px; font-size: 18px; display: inline-block;">Перейти до покупок</a>
+ 42         </div>
+ 43     <?php elseif (empty($cart)): ?>
+ 44         <p style="background-color: #f8f8f8; padding: 15px; border-radius: 5px;">Кошик порожній.</p>
+ 45         <div style="margin-top: 20px;">
+ 46             <a href="index.php?page=products" style="background-color: #2196F3; color: white; padding: 10px 15px; text-decoration: none; border-radius: 4px; display: inline-block;">Перейти до покупок</a>
+ 47         </div>
+ 48     <?php else: ?>
+ 49         <div style="background-color: #f9f9f9; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+ 50             <table style="width: 100%; border-collapse: collapse;">
+ 51                 <thead>
+ 52                     <tr style="background-color: #e0e0e0;">
+ 53                         <th style="padding: 10px; text-align: left; border-bottom: 1px solid #ddd;">№</th>
+ 54                         <th style="padding: 10px; text-align: left; border-bottom: 1px solid #ddd;">Назва</th>
+ 55                         <th style="padding: 10px; text-align: right; border-bottom: 1px solid #ddd;">Ціна</th>
+ 56                         <th style="padding: 10px; text-align: right; border-bottom: 1px solid #ddd;">Кількість</th>
+ 57                         <th style="padding: 10px; text-align: right; border-bottom: 1px solid #ddd;">Сума</th>
+ 58                         <th style="padding: 10px; text-align: center; border-bottom: 1px solid #ddd;">Дія</th>
+ 59                     </tr>
+ 60                 </thead>
+ 61                 <tbody>
+ 62                     <?php $i = 1; foreach ($cart as $code => $qty): ?>
+ 63                         <?php
+ 64                         $product = getProductByCode($code);
+ 65                         if (!$product) continue;
+ 66                         $price = $product['price'];
+ 67                         $itemTotal = $price * $qty;
+ 68                         $total += $itemTotal;
+ 69                         ?>
+ 70                         <tr>
+ 71                             <td style="padding: 10px; border-bottom: 1px solid #eee;"><?= $i ?></td>
+ 72                             <td style="padding: 10px; border-bottom: 1px solid #eee;">
+ 73                                 <div style="display: flex; align-items: center;">
+ 74                                     <div style="width: 40px; height: 40px; margin-right: 10px; background-color: #eee; display: flex; justify-content: center; align-items: center; border-radius: 4px;">
+ 75                                         <img src="../icons/products/<?= htmlspecialchars($product['image']) ?>" alt="<?= htmlspecialchars($product['name']) ?>" style="max-width: 30px; max-height: 30px;">
+ 76                                     </div>
+ 77                                     <?= htmlspecialchars($product['name']) ?>
+ 78                                 </div>
+ 79                             </td>
+ 80                             <td style="padding: 10px; text-align: right; border-bottom: 1px solid #eee;"><?= $price ?> грн</td>
+ 81                             <td style="padding: 10px; text-align: right; border-bottom: 1px solid #eee;"><?= $qty ?></td>
+ 82                             <td style="padding: 10px; text-align: right; border-bottom: 1px solid #eee; color: #4CAF50; font-weight: bold;"><?= $itemTotal ?> грн</td>
+ 83                             <td style="padding: 10px; text-align: center; border-bottom: 1px solid #eee;">
+ 84                                 <a href="index.php?page=basket&remove=<?= urlencode($code) ?>" style="display: inline-block;" onclick="return confirm('Видалити товар з кошика?')">
+ 85                                     <img src="../icons/delete.png" alt="Видалити" style="width: 20px; height: 20px;">
+ 86                                 </a>
+ 87                             </td>
+ 88                         </tr>
+ 89                     <?php $i++; endforeach; ?>
+ 90                 </tbody>
+ 91                 <tfoot>
+ 92                     <tr>
+ 93                         <td colspan="4" style="padding: 10px; text-align: right; font-weight: bold;">Загальна вартість:</td>
+ 94                         <td style="padding: 10px; text-align: right; color: #4CAF50; font-weight: bold;"><?= $total ?> грн</td>
+ 95                         <td></td>
+ 96                     </tr>
+ 97                 </tfoot>
+ 98             </table>
+ 99         </div>
+100
+101         <div style="margin-top: 20px; display: flex; justify-content: space-between;">
+102             <div>
+103                 <a href="index.php?page=products" style="background-color: #2196F3; color: white; padding: 10px 15px; text-decoration: none; border-radius: 4px; display: inline-block;">Повернутися до продуктів</a>
+104             </div>
+105             <div>
+106                 <a href="index.php?page=basket&clear=1" style="background-color: #f44336; color: white; padding: 10px 15px; text-decoration: none; border-radius: 4px; display: inline-block; margin-right: 10px;" onclick="return confirm('Очистити весь кошик?')">Очистити кошик</a>
+107                 <a href="index.php?page=basket&checkout=1" style="background-color: #4CAF50; color: white; padding: 10px 15px; text-decoration: none; border-radius: 4px; display: inline-block;" onclick="return confirm('Ви впевнені, що хочете оформити замовлення?')">Оформити замовлення</a>
+108             </div>
+109         </div>
+110     <?php endif; ?>
+111 </div>
+
+
+В.6 Програмна реалізація login.php
+  1 <?php
+  2 if (session_status() === PHP_SESSION_NONE) {
+  3     session_start();
+  4 }
+  5
+  6 $credentials = require_once __DIR__ . '/credential.php';
+  7
+  8 $error = '';
+  9
+ 10 if (isset($_SESSION['username'])) {
+ 11     header('Location: index.php?page=products');
+ 12     exit;
+ 13 }
+ 14
+ 15 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+ 16     $username = trim($_POST['username'] ?? '');
+ 17     $password = trim($_POST['password'] ?? '');
+ 18
+ 19     if ($username === '' || $password === '') {
+ 20         $error = "Будь ласка, заповніть всі поля.";
+ 21     } elseif ($username === $credentials['userName'] && $password === $credentials['password']) {
+ 22         $_SESSION['username'] = $username;
+ 23         $_SESSION['login_time'] = date('Y-m-d H:i:s');
+ 24         header('Location: index.php?page=products');
+ 25         exit;
+ 26     } else {
+ 27         $error = "Невірне ім'я користувача або пароль.";
+ 28     }
+ 29 }
+ 30 ?>
+ 31
+ 32 <!DOCTYPE html>
+ 33 <html lang="uk">
+ 34 <head>
+ 35     <meta charset="UTF-8" />
+ 36     <meta name="viewport" content="width=device-width, initial-scale=1" />
+ 37     <title>Login</title>
+ 38     <style>
+ 39         body {
+ 40             font-family: Arial, sans-serif;
+ 41             background-color: #f9f9f9;
+ 42             margin: 0;
+ 43             padding: 0;
+ 44         }
+ 45         form {
+ 46             max-width: 400px;
+ 47             margin: 60px auto;
+ 48             background: white;
+ 49             padding: 30px 40px;
+ 50             border-radius: 8px;
+ 51             box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+ 52             text-align: center;
+ 53         }
+ 54         form h2 {
+ 55             font-weight: 900;
+ 56             font-size: 28px;
+ 57             margin-bottom: 30px;
+ 58             color: #000;
+ 59         }
+ 60         label {
+ 61             display: block;
+ 62             text-align: left;
+ 63             font-weight: 600;
+ 64             margin-bottom: 8px;
+ 65             color: #222;
+ 66             font-size: 16px;
+ 67         }
+ 68         input[type="text"],
+ 69         input[type="password"] {
+ 70             width: 95%;
+ 71             padding: 12px 15px;
+ 72             font-size: 16px;
+ 73             border: 2px solid #ccc;
+ 74             border-radius: 5px;
+ 75             margin-bottom: 25px;
+ 76             transition: border-color 0.3s ease;
+ 77         }
+ 78         input[type="text"]:focus,
+ 79         input[type="password"]:focus {
+ 80             border-color: #000;
+ 81             outline: none;
+ 82         }
+ 83         input[type="submit"] {
+ 84             background-color: #000;
+ 85             color: #fff;
+ 86             font-weight: 700;
+ 87             font-size: 18px;
+ 88             padding: 12px 30px;
+ 89             border: none;
+ 90             border-radius: 6px;
+ 91             cursor: pointer;
+ 92             transition: background-color 0.3s ease;
+ 93             width: 95%;
+ 94             letter-spacing: 1px;
+ 95         }
+ 96         input[type="submit"]:hover {
+ 97             background-color: #333;
+ 98         }
+ 99         .error {
+100             color: #b00020;
+101             background-color: #fdd;
+102             padding: 10px 15px;
+103             border-radius: 6px;
+104             margin-bottom: 20px;
+105             font-weight: 600;
+106             font-size: 14px;
+107             text-align: left;
+108         }
+109     </style>
+110 </head>
+111 <body>
+112     <form method="POST" action="index.php?page=login" novalidate>
+113         <h2>Вхід на сайт</h2>
+114
+115         <?php if ($error): ?>
+116             <div class="error"><?= htmlspecialchars($error) ?></div>
+117         <?php endif; ?>
+118
+119         <label for="username">Ім'я користувача:</label>
+120         <input type="text" id="username" name="username" required autocomplete="username" value="<?= htmlspecialchars($_POST['username'] ?? '') ?>" />
+121
+122         <label for="password">Пароль:</label>
+123         <input type="password" id="password" name="password" required autocomplete="current-password" />
+124
+125         <input type="submit" value="Login" />
+126     </form>
+127 </body>
+128 </html>
+
+
+В.7 Програмна реалізація page404.php
+  1 <?php
+  2
+  3 http_response_code(404);
+  4
+  5 ?>
+  6
+  7 <!DOCTYPE html>
+  8 <html lang="uk">
+  9 <head>
+ 10     <meta charset="UTF-8">
+ 11     <title>Доступ заборонено</title>
+ 12     <style>
+ 13         body {
+ 14             font-family: Arial, sans-serif;
+ 15             text-align: center;
+ 16         }
+ 17         h1 {
+ 18             font-size: 48px;
+ 19             color: #d9534f;
+ 20         }
+ 21         p {
+ 22             font-size: 24px;
+ 23         }
+ 24         a {
+ 25             color: #0275d8;
+ 26             text-decoration: none;
+ 27             font-weight: bold;
+ 28         }
+ 29         a:hover {
+ 30             text-decoration: underline;
+ 31         }
+ 32         .container {
+ 33             background: white;
+ 34             padding: 40px;
+ 35             border-radius: 10px;
+ 36             display: inline-block;
+ 37             box-shadow: 0 0 15px rgba(0,0,0,0.1);
+ 38             margin: 10 0 10 0;
+ 39         }
+ 40     </style>
+ 41 </head>
+ 42 <body>
+ 43     <div class="container">
+ 44         <h1>Доступ заборонено</h1>
+ 45         <p>Для перегляду цього контенту, будь ласка, <a href="index.php?page=login">авторизуйтеся</a>.</p>
+ 46     </div>
+ 47 </body>
+ 48 </html>
+
+
+В.8 Програмна реалізація profile.php
+  1 <?php
+  2 if (session_status() === PHP_SESSION_NONE) {
+  3     session_start();
+  4 }
+  5
+  6 $profileFile = __DIR__ . '/profile_data.php';
+  7
+  8 $profile = file_exists($profileFile) ? include $profileFile : [
+  9     'firstName' => '',
+ 10     'lastName' => '',
+ 11     'birthDate' => '',
+ 12     'info' => '',
+ 13     'photo' => ''
+ 14 ];
+ 15
+ 16 $errors = [];
+ 17 $success = '';
+ 18
+ 19 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+ 20     $firstName = trim($_POST['firstName'] ?? '');
+ 21     $lastName = trim($_POST['lastName'] ?? '');
+ 22     $birthDate = $_POST['birthDate'] ?? '';
+ 23     $info = trim($_POST['info'] ?? '');
+ 24
+ 25     if (mb_strlen($firstName) < 2) {
+ 26         $errors[] = "Ім'я повинно містити принаймні 2 символи.";
+ 27     }
+ 28
+ 29     if (mb_strlen($lastName) < 2) {
+ 30         $errors[] = "Прізвище повинно містити принаймні 2 символи.";
+ 31     }
+ 32
+ 33     if (!$birthDate || strtotime($birthDate) === false) {
+ 34         $errors[] = "Вкажіть коректну дату народження.";
+ 35     } else {
+ 36         $age = (int) ((time() - strtotime($birthDate)) / (365.25 * 24 * 3600));
+ 37         if ($age < 16) {
+ 38             $errors[] = "Вік повинен бути не менше 16 років.";
+ 39         }
+ 40     }
+ 41
+ 42     if (mb_strlen($info) < 50) {
+ 43         $errors[] = "Стислий опис повинен містити не менше 50 символів.";
+ 44     }
+ 45
+ 46     $photoPath = $profile['photo'];
+ 47     if (!empty($_FILES['photo']['name'])) {
+ 48         $allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+ 49         $maxFileSize = 2 * 1024 * 1024;
+ 50
+ 51         if (!in_array($_FILES['photo']['type'], $allowedTypes)) {
+ 52             $errors[] = "Фото повинно бути у форматі jpg, png або gif.";
+ 53         } elseif ($_FILES['photo']['error'] !== UPLOAD_ERR_OK) {
+ 54             $errors[] = "Помилка завантаження файлу.";
+ 55         } elseif ($_FILES['photo']['size'] > $maxFileSize) {
+ 56             $errors[] = "Розмір файлу не повинен перевищувати 2 МБ.";
+ 57         } else {
+ 58             $uploadDir = __DIR__ . '/../uploads/';
+ 59             if (!is_dir($uploadDir)) {
+ 60                 mkdir($uploadDir, 0755, true);
+ 61             }
+ 62
+ 63             $ext = strtolower(pathinfo($_FILES['photo']['name'], PATHINFO_EXTENSION));
+ 64             $newFilename = uniqid('photo_', true) . '.' . $ext;
+ 65             $targetFile = $uploadDir . $newFilename;
+ 66
+ 67             if (move_uploaded_file($_FILES['photo']['tmp_name'], $targetFile)) {
+ 68                 $photoPath = 'Uploads/' . $newFilename;
+ 69             } else {
+ 70                 $errors[] = "Не вдалося зберегти файл.";
+ 71             }
+ 72         }
+ 73     }
+ 74
+ 75     if (empty($errors)) {
+ 76         $profile = [
+ 77             'firstName' => $firstName,
+ 78             'lastName' => $lastName,
+ 79             'birthDate' => $birthDate,
+ 80             'info' => $info,
+ 81             'photo' => $photoPath
+ 82         ];
+ 83
+ 84         $content = '<?php return ' . var_export($profile, true) . ';';
+ 85         file_put_contents($profileFile, $content);
+ 86
+ 87         $success = "Дані профілю успішно збережено.";
+ 88     }
+ 89 }
+ 90
+ 91 $photoFullPath = $profile['photo'] ? __DIR__ . '/../' . $profile['photo'] : '';
+ 92 ?>
+ 93
+ 94 <!DOCTYPE html>
+ 95 <html lang="uk">
+ 96 <head>
+ 97     <meta charset="UTF-8" />
+ 98     <title>Профіль користувача</title>
+ 99     <style>
+100         body {
+101             font-family: Arial, sans-serif;
+102             margin: 2em;
+103             background-color: #f8f9fa;
+104         }
+105
+106         h2 {
+107             text-align: center;
+108         }
+109
+110         .profile-form {
+111             max-width: 900px;
+112             margin: auto;
+113             background: #fff;
+114             padding: 2em;
+115             border-radius: 12px;
+116             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+117             display: flex;
+118             gap: 30px;
+119             margin-bottom: 15px;
+120         }
+121
+122         .left-col {
+123             width: 30%;
+124             text-align: center;
+125         }
+126
+127         .left-col img {
+128             width: 100%;
+129             aspect-ratio: 1 / 1;
+130             object-fit: cover;
+131             border-radius: 12px;
+132             border: 1px solid #ccc;
+133             cursor: pointer;
+134         }
+135
+136         .left-col input[type="file"] {
+137             display: none;
+138         }
+139
+140         .right-col {
+141             width: 70%;
+142         }
+143
+144         .form-group {
+145             display: flex;
+146             gap: 15px;
+147         }
+148
+149         .form-group > div {
+150             flex: 1;
+151         }
+152
+153         label {
+154             display: block;
+155             margin: 12px 0 4px;
+156             font-weight: bold;
+157         }
+158
+159         input[type="text"],
+160         input[type="date"],
+161         textarea {
+162             width: 100%;
+163             padding: 8px;
+164             font-size: 1rem;
+165             border: 1px solid #ccc;
+166             border-radius: 6px;
+167             box-sizing: border-box;
+168         }
+169
+170         textarea {
+171             resize: vertical;
+172             min-height: 120px;
+173         }
+174
+175         .button-group {
+176             display: flex;
+177             justify-content: space-between;
+178             align-items: center;
+179             margin-top: 20px;
+180         }
+181
+182         .submit-btn {
+183             background-color: #007bff;
+184             color: white;
+185             padding: 12px 24px;
+186             font-size: 1rem;
+187             border: none;
+188             border-radius: 6px;
+189             cursor: pointer;
+190         }
+191
+192         .submit-btn:hover {
+193             background-color: #0056b3;
+194         }
+195
+196         .logout-btn {
+197             background-color: #dc3545;
+198             color: white;
+199             padding: 12px 24px;
+200             font-size: 1rem;
+201             border: none;
+202             border-radius: 6px;
+203             cursor: pointer;
+204         }
+205
+206         .logout-btn:hover {
+207             background-color: #c82333;
+208         }
+209
+210         .messages {
+211             max-width: 900px;
+212             margin: 1em auto;
+213         }
+214
+215         .messages p {
+216             padding: 10px;
+217             border-radius: 6px;
+218         }
+219
+220         .messages .success {
+221             background-color: #d4edda;
+222             color: #155724;
+223         }
+224
+225         .messages .error {
+226             background-color: #f8d7da;
+227             color: #721c24;
+228         }
+229
+230         .profile-photo {
+231             width: 100%;
+232             max-width: 200px;
+233             border-radius: 12px;
+234             cursor: pointer;
+235         }
+236
+237         .photo-placeholder {
+238             width: 100%;
+239             padding-bottom: 100%;
+240             background: #eee;
+241             border-radius: 12px;
+242             display: flex;
+243             align-items: center;
+244             justify-content: center;
+245             text-align: center;
+246             cursor: pointer;
+247             color: #666;
+248             font-size: 14px;
+249         }
+250
+251         .submit-btn:disabled,
+252         .logout-btn:disabled {
+253             opacity: 0.5;
+254             cursor: not-allowed;
+255         }
+256     </style>
+257 </head>
+258 <body>
+259     <h2>Профіль користувача</h2>
+260
+261     <div class="messages">
+262         <?php if ($success): ?>
+263             <p class="success"><?= htmlspecialchars($success) ?></p>
+264         <?php endif; ?>
+265
+266         <?php if ($errors): ?>
+267             <?php foreach ($errors as $error): ?>
+268                 <p class="error"><?= htmlspecialchars($error) ?></p>
+269             <?php endforeach; ?>
+270         <?php endif; ?>
+271     </div>
+272
+273     <form method="post" enctype="multipart/form-data" class="profile-form" id="profileForm">
+274         <div class="left-col">
+275             <label for="photoInput">
+276                 <?php if ($profile['photo'] && file_exists($photoFullPath)): ?>
+277                     <img src="/Uploads/<?= htmlspecialchars(basename($profile['photo'])) ?>" alt="Фото профілю"
+278                         title="Натисніть, щоб змінити фото" class="profile-photo" />
+279                 <?php else: ?>
+280                     <div class="photo-placeholder">
+281                         <span>Завантажте фото</span>
+282                     </div>
+283                 <?php endif; ?>
+284             </label>
+285             <input type="file" id="photoInput" name="photo" accept="image/jpeg,image/png,image/gif" />
+286         </div>
+287
+288         <div class="right-col">
+289             <div class="form-group">
+290                 <div>
+291                     <label for="firstName">Ім’я</label>
+292                     <input id="firstName" type="text" name="firstName"
+293                         value="<?= htmlspecialchars($profile['firstName']) ?>" />
+294                 </div>
+295                 <div>
+296                     <label for="lastName">Прізвище</label>
+297                     <input id="lastName" type="text" name="lastName"
+298                         value="<?= htmlspecialchars($profile['lastName']) ?>" />
+299                 </div>
+300                 <div>
+301                     <label for="birthDate">Дата народження</label>
+302                     <input id="birthDate" type="date" name="birthDate"
+303                         value="<?= htmlspecialchars($profile['birthDate']) ?>" />
+304                 </div>
+305             </div>
+306
+307             <label for="info">Стислий опис</label>
+308             <textarea id="info" name="info"><?= htmlspecialchars($profile['info']) ?></textarea>
+309
+310             <div class="button-group">
+311                 <button type="button" class="logout-btn" onclick="window.location.href='/pages/logout.php'">Logout</button>
+312                 <button type="submit" class="submit-btn">Зберегти</button>
+313             </div>
+314         </div>
+315     </form>
+316
+317     <script>
+318         document.querySelector('label[for="photoInput"]').addEventListener('click', function (e) {
+319             e.preventDefault();
+320             document.getElementById('photoInput').click();
+321         });
+322
+323         document.getElementById('photoInput').addEventListener('change', function () {
+324             if (this.files.length > 0) {
+325                 if (confirm('Завантажити нове фото?')) {
+326                     const form = document.getElementById('profileForm');
+327                     const formData = new FormData(form);
+328                     const submitButton = form.querySelector('.submit-btn');
+329                     submitButton.disabled = true;
+330
+331                     fetch(form.action, {
+332                         method: 'POST',
+333                         body: formData
+334                     }).then(response => {
+335                         if (response.ok) {
+336                             window.location.reload();
+337                         } else {
+338                             alert('Помилка завантаження фото.');
+339                             submitButton.disabled = false;
+340                         }
+341                     }).catch(() => {
+342                         alert('Помилка сервера.');
+343                         submitButton.disabled = false;
+344                     });
+345                 } else {
+346                     this.value = '';
+347                 }
+348             }
+349         });
+350
+351         document.getElementById('profileForm').addEventListener('submit', function (e) {
+352             const submitButton = this.querySelector('.submit-btn');
+353             if (submitButton.disabled) {
+354                 e.preventDefault();
+355             } else {
+356                 submitButton.disabled = true;
+357             }
+358         });
+359     </script>
+360 </body>
+361 </html>
+
+
+В.9 Вміст файлу credential.php
+  1 <?php
+  2 return [
+  3     'userName' => 'Test',
+  4     'password' => '123123'
+  5 ];
+
+
+В.10 Вміст файлу logout.php
+  1 <?php
+  2 session_start();
+  3 session_unset();
+  4 session_destroy();
+  5
+  6 header('Location: /index.php');
+  7 exit;
+
+
+В.11 Вміст файлу profile_data.php 
+  1 <?php return array (
+  2   'firstName' => '',
+  3   'lastName' => '',
+  4   'birthDate' => '',
+  5   'info' => '',
+  6   'photo' => '',
+  7 );
+
+
+В.12 Вміст файлу index.php 
+  1 <?php
+  2 session_start();
+  3
+  4 $auth_required_pages = ['products', 'profile', 'basket'];
+  5 $public_pages = ['login'];
+  6 $all_pages = array_merge($auth_required_pages, $public_pages, ['home', 'logout', 'page404']);
+  7
+  8 $page = $_GET['page'] ?? 'home';
+  9
+ 10 if (!in_array($page, $all_pages)) {
+ 11     http_response_code(404);
+ 12     include 'components/header.php';
+ 13     echo '<div style="text-align:center; margin: 40px; font-family: Arial, sans-serif;">
+ 14             <h1>Сторінка не знайдена</h1>
+ 15           </div>';
+ 16     include 'components/footer.php';
+ 17     exit;
+ 18 }
+ 19
+ 20 if (isset($_SESSION['username']) && $page === 'login') {
+ 21     header('Location: index.php');
+ 22     exit;
+ 23 }
+ 24
+ 25 if ($page === 'logout') {
+ 26     session_destroy();
+ 27     header('Location: index.php');
+ 28     exit;
+ 29 }
+ 30
+ 31 if (in_array($page, $auth_required_pages) && !isset($_SESSION['username'])) {
+ 32     header('Location: index.php?page=page404');
+ 33     exit;
+ 34 }
+ 35
+ 36 if ($page !== 'login') {
+ 37     include 'components/header.php';
+ 38 }
+ 39
+ 40
+ 41 if (isset($_SESSION['auth_error'])) {
+ 42     echo '<p style="text-align:center; color:red; font-weight:bold; font-family: Arial, sans-serif;">' .
+ 43         htmlspecialchars($_SESSION['auth_error']) .
+ 44         '</p>';
+ 45     unset($_SESSION['auth_error']);
+ 46 }
+ 47
+ 48 switch ($page) {
+ 49     case 'home':
+ 50         echo '<div style="text-align: center; margin: 40px; font-family: Arial, sans-serif;">
+ 51                 <h1>Продовольчий магазин "Весна"</h1>
+ 52                 <p>Все буде УКРАЇНА!</p>
+ 53               </div>';
+ 54         break;
+ 55     case 'login':
+ 56         include 'pages/login.php';
+ 57         break;
+ 58     case 'products':
+ 59         include 'pages/products.php';
+ 60         break;
+ 61     case 'basket':
+ 62         include 'pages/basket.php';
+ 63         break;
+ 64     case 'profile':
+ 65         include 'pages/profile.php';
+ 66         break;
+ 67     case 'page404':
+ 68         include 'pages/page404.php';
+ 69         break;
+ 70     default:
+ 71         http_response_code(404);
+ 72         echo '<div style="text-align:center; margin: 40px; font-family: Arial, sans-serif;">
+ 73                 <h1>Сторінка не знайдена</h1>
+ 74               </div>';
+ 75         break;
+ 76 }
+ 77
+ 78 if ($page !== 'login') {
+ 79     include 'components/footer.php';
+ 80 }
